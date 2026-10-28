@@ -1,0 +1,1 @@
+For each NIFTY 50 stock and calendar date, this screener selects the earliest available 5-minute candle and calculates its range as high minus low. Results are ranked by range in descending order by default, with optional sorting, inclusive date bounds, and a one-row default limit for viewing the top-ranked stock.
