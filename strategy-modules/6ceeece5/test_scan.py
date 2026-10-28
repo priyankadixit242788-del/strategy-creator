@@ -34,15 +34,40 @@ class FakeClient:
             return SimpleNamespace(result_rows=[(value,) for value in sorted(dates, reverse=True)])
         if "row_number()" in query:
             scan_date = parameters["scan_date"]
+            candles = [
+                (
+                    "TCS",
+                    105,
+                    100,
+                    datetime.combine(scan_date, datetime.min.time()),
+                    102,
+                    103,
+                    104,
+                ),
+                (
+                    "INFY",
+                    105,
+                    100,
+                    datetime.combine(scan_date, datetime.min.time()),
+                    102,
+                    103,
+                    106,
+                ),
+                (
+                    "RELIANCE",
+                    120,
+                    110,
+                    datetime.combine(scan_date, datetime.min.time()),
+                    115,
+                    112,
+                    118,
+                ),
+            ]
             return SimpleNamespace(
                 result_rows=[
-                    ("TCS", 105, 100, datetime.combine(scan_date, datetime.min.time())),
-                    (
-                        "RELIANCE",
-                        120,
-                        110,
-                        datetime.combine(scan_date, datetime.min.time()),
-                    ),
+                    candle[:4]
+                    for candle in candles
+                    if all(candle[2] < sma < candle[1] for sma in candle[4:])
                 ]
             )
         raise AssertionError(f"Unexpected query: {query}")
@@ -93,6 +118,16 @@ def test_default_window_returns_top_match_per_date(monkeypatch):
         if "row_number()" in query
     )
     assert all("PARTITION BY stock" in query for query, _ in fake_client.queries if "row_number()" in query)
+    assert all(
+        condition in query
+        for query, _ in fake_client.queries
+        if "row_number()" in query
+        for condition in (
+            "low < sma20 AND high > sma20",
+            "low < sma50 AND high > sma50",
+            "low < sma200 AND high > sma200",
+        )
+    )
 
 
 def test_explicit_range_sort_override_and_unlimited_per_date(monkeypatch):

@@ -150,6 +150,9 @@ def _first_candle_query(scan_date: date) -> tuple[str, dict[str, Any]]:
                 high,
                 low,
                 date,
+                sma20,
+                sma50,
+                sma200,
                 row_number() OVER (
                     PARTITION BY stock
                     ORDER BY date ASC
@@ -158,6 +161,9 @@ def _first_candle_query(scan_date: date) -> tuple[str, dict[str, Any]]:
             WHERE {" AND ".join(conditions)}
         )
         WHERE candle_rank = 1
+            AND low < sma20 AND high > sma20
+            AND low < sma50 AND high > sma50
+            AND low < sma200 AND high > sma200
     """
     return query, parameters
 
@@ -308,8 +314,9 @@ def scan(
     return {
         "success": True,
         "criteria": (
-            "NIFTY 50 stocks ranked by the High - Low range of each stock's "
-            f"first 5-minute candle from {applied_from} through {applied_to}."
+            "NIFTY 50 stocks whose first 5-minute candle crosses SMA20, SMA50, "
+            "and SMA200, ranked by High - Low range, from "
+            f"{applied_from} through {applied_to}."
         ),
         "columns": COLUMNS,
         "presentation": PRESENTATION,
