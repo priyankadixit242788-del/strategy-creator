@@ -1,0 +1,1 @@
+For each stock in `signals.new`, this module returns one informational alert and ignores `still` and `dropped` signals; it does not create trades because this setup is alert-only. Alert text is formatted as `SYMBOL · column: value · candle TIME · New Bullish Moribozu signal.` and is kept under 220 characters.

@@ -1,0 +1,6 @@
+{
+  "setup_id": "0e087efa",
+  "screener_job_id": "79adbff9",
+  "mode": "alert",
+  "prompt": "Use the Bullish Moribozu Stock Screener (job 79adbff9) with empty screener parameters. Run at DAILY interval from 09:15 to 15:15 IST on the NIFTY 50 index universe, scoped to the top 1 stock by volume descending. Alert once ever per stock through in-app and email channels. This is alert-only (trade_legs=false), with 20 candles of context; do not create trades. Alert text includes the stock, screener column values, candle time, and a short reason."
+}
