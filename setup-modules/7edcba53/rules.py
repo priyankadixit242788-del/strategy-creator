@@ -4,7 +4,7 @@ A setup has no script of its own. Every decision comes from the setup's configur
 guardrails); this module only turns the new signals into the generic actions the executors understand:
 
 - alert mode without trade legs  -> `alert` per new stock
-- trade legs defined, or paper / live mode -> `enter` per new stock (the alert executor records it as "would trade")
+- trade legs defined, or paper / live mode -> also `enter` per new stock without an open position
 
 Direction (`spec.direction`): `{"mode": "fixed"}` (default, uses `legs.side`), `{"mode": "candle"}` (long when the signal
 candle closed above its open, short when below) or `{"mode": "column", "column": "<screener column>"}` (long/short from
@@ -57,19 +57,48 @@ def resolve_side(direction: dict, signal: dict, candles: list | None, default: s
     return default
 
 
+def _alert_text(stock: str, row: dict) -> str:
+    """Use display labels or raw API keys, preserving the screener's historical candle time."""
+    def value(label, key):
+        result = row.get(label)
+        if result is None:
+            result = row.get(key)
+        return "unknown" if result is None else " ".join(str(result).split())
+
+    return (
+        f"{stock} · Date: {value('Date', 'scan_date')} · "
+        f"High: {value('High', 'high')} · Low: {value('Low', 'low')} · "
+        f"Range: {value('range', 'range')} · Candle time: {value('Candle time', 'date')} · "
+        "New SMA crossover match."
+    )[:219]
+
+
 def evaluate(payload: dict) -> dict:
     """Engine payload -> {actions, notes, screener_params, has_override_key} (same shape the old module returned)."""
     setup = payload.get("setup") or {}
     spec = setup.get("spec") or {}
     legs = setup.get("legs") or spec.get("legs") or {}
-    trade = bool(spec.get("trade_legs")) or setup.get("mode") in ("paper", "live")
+    trade = bool(
+        spec.get("trade_legs") or spec.get("legs") or spec.get("entry_style") or spec.get("exit_rules")
+    ) or setup.get("mode") in ("paper", "live")
     default_side = "short" if str(legs.get("side") or "long").lower() in ("short", "sell") else "long"
     candles = payload.get("candles") or {}
+    open_stocks = {
+        position.get("stock")
+        for position in payload.get("positions") or []
+        if position.get("status") in ("open", "pending_pullback", "partially_closed")
+    }
     actions = []
     for sig in (payload.get("signals") or {}).get("new") or []:
         stock = sig["stock"]
-        if not trade:
-            actions.append({"type": "alert", "stock": stock})
+        actions.append({
+            "type": "alert",
+            "stock": stock,
+            "title": f"SMA Crossover Range Hunter: {stock}"[:100],
+            "text": _alert_text(stock, sig.get("row") or {}),
+            "severity": "info",
+        })
+        if not trade or stock in open_stocks:
             continue
         side = resolve_side(spec.get("direction"), sig, candles.get(stock), default_side)
         actions.append({"type": "enter", "stock": stock, "side": side})
