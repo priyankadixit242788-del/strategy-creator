@@ -6,59 +6,6 @@ import clickhouse_connect
 from fastapi import APIRouter, FastAPI, Query
 from fastapi.responses import JSONResponse
 
-NIFTY_50 = [
-    "ADANIENT",
-    "ADANIPORTS",
-    "APOLLOHOSP",
-    "ASIANPAINT",
-    "AXISBANK",
-    "BAJAJ-AUTO",
-    "BAJFINANCE",
-    "BAJAJFINSV",
-    "BEL",
-    "BHARTIARTL",
-    "CIPLA",
-    "COALINDIA",
-    "DRREDDY",
-    "EICHERMOT",
-    "ETERNAL",
-    "GRASIM",
-    "HCLTECH",
-    "HDFCBANK",
-    "HDFCLIFE",
-    "HEROMOTOCO",
-    "HINDALCO",
-    "HINDUNILVR",
-    "ICICIBANK",
-    "INDIGO",
-    "INDUSINDBK",
-    "INFY",
-    "ITC",
-    "JIOFIN",
-    "JSWSTEEL",
-    "KOTAKBANK",
-    "LT",
-    "LTIM",
-    "M&M",
-    "MARUTI",
-    "NESTLEIND",
-    "NTPC",
-    "ONGC",
-    "POWERGRID",
-    "RELIANCE",
-    "SBILIFE",
-    "SBIN",
-    "SHRIRAMFIN",
-    "SUNPHARMA",
-    "TATACONSUM",
-    "TATASTEEL",
-    "TCS",
-    "TECHM",
-    "TITAN",
-    "TRENT",
-    "ULTRACEMCO",
-]
-
 COLUMNS = [
     {"key": "stock", "label": "Symbol", "format": "text"},
     {"key": "scan_date", "label": "Date", "format": "date"},
@@ -100,8 +47,8 @@ def _client() -> Any:
 
 def _base_conditions() -> tuple[list[str], dict[str, Any]]:
     return (
-        ["interval = {interval:String}", "stock IN {stocks:Array(String)}"],
-        {"interval": "5", "stocks": NIFTY_50},
+        ["interval = {interval:String}"],
+        {"interval": "5"},
     )
 
 
@@ -138,10 +85,33 @@ def _trading_dates_query(
     return query, parameters
 
 
-def _first_candle_query(scan_date: date) -> tuple[str, dict[str, Any]]:
+def _first_candle_query(
+    scan_date: date, universe_size: int = 300, liquidity_lookback: int = 20
+) -> tuple[str, dict[str, Any]]:
     conditions, parameters = _base_conditions()
+    conditions.append("""
+        stock IN (
+            SELECT stock
+            FROM stock__candles_data
+            WHERE interval = {interval:String}
+                AND toDate(date) IN (
+                    SELECT DISTINCT toDate(date) AS trading_date
+                    FROM stock__candles_data
+                    WHERE interval = {interval:String}
+                        AND toDate(date) < {scan_date:Date}
+                    ORDER BY trading_date DESC
+                    LIMIT {liquidity_lookback:UInt32}
+                )
+            GROUP BY stock
+            HAVING sum(close * volume) > 0
+            ORDER BY sum(close * volume) DESC, stock ASC
+            LIMIT {universe_size:UInt32}
+        )
+    """)
     conditions.append("toDate(date) = {scan_date:Date}")
     parameters["scan_date"] = scan_date
+    parameters["universe_size"] = universe_size
+    parameters["liquidity_lookback"] = liquidity_lookback
     query = f"""
         SELECT stock, high, low, date
         FROM (
@@ -153,6 +123,7 @@ def _first_candle_query(scan_date: date) -> tuple[str, dict[str, Any]]:
                 sma20,
                 sma50,
                 sma200,
+                superTrend,
                 row_number() OVER (
                     PARTITION BY stock
                     ORDER BY date ASC
@@ -164,6 +135,7 @@ def _first_candle_query(scan_date: date) -> tuple[str, dict[str, Any]]:
             AND low < sma20 AND high > sma20
             AND low < sma50 AND high > sma50
             AND low < sma200 AND high > sma200
+            AND low < superTrend AND high > superTrend
     """
     return query, parameters
 
@@ -198,6 +170,8 @@ def scan(
     sort_dir: Literal["asc", "desc"] = "desc",
     from_date: str | None = None,
     to_date: str | None = None,
+    universe_size: int = Query(default=300, ge=1, le=300),
+    liquidity_lookback: int = Query(default=20, ge=1, le=90),
 ) -> dict[str, Any]:
     parsed_from = _parse_date(from_date, "from_date")
     parsed_to = _parse_date(to_date, "to_date")
@@ -286,7 +260,9 @@ def scan(
     total = 0
     matches = []
     for scan_date in scan_dates:
-        query, parameters = _first_candle_query(scan_date)
+        query, parameters = _first_candle_query(
+            scan_date, universe_size, liquidity_lookback
+        )
         rows = client.query(query, parameters=parameters).result_rows
         daily_matches = []
         for stock, high, low, candle_date in rows:
@@ -314,13 +290,34 @@ def scan(
     return {
         "success": True,
         "criteria": (
-            "NIFTY 50 stocks whose first 5-minute candle crosses SMA20, SMA50, "
-            "and SMA200, ranked by High - Low range, from "
+            f"Top {universe_size} highly liquid stocks by traded value over the "
+            f"preceding {liquidity_lookback} trading sessions whose first 5-minute "
+            "candle crosses SMA20, SMA50, SMA200, and SuperTrend, "
+            "ranked by High - Low range, from "
             f"{applied_from} through {applied_to}."
         ),
         "columns": COLUMNS,
         "presentation": PRESENTATION,
-        "parameters": [],
+        "parameters": [
+            {
+                "key": "universe_size",
+                "label": "Liquid stock count",
+                "type": "number",
+                "default": 300,
+                "value": universe_size,
+                "min": 1,
+                "max": 300,
+            },
+            {
+                "key": "liquidity_lookback",
+                "label": "Liquidity lookback (trading sessions)",
+                "type": "number",
+                "default": 20,
+                "value": liquidity_lookback,
+                "min": 1,
+                "max": 90,
+            },
+        ],
         "date_range": {
             "mode": "range",
             "from_date": applied_from.isoformat() if applied_from else None,
