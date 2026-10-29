@@ -1,0 +1,6 @@
+{
+  "setup_id": "7edcba53",
+  "screener_job_id": "6ceeece5",
+  "mode": "alert",
+  "prompt": "This setup uses the SMA Crossover Range Hunter screener (id 6ceeece5) to alert on every trading day at the recommended schedule. It will monitor the NIFTY 50 universe and act on every new match. Alerts will be sent in-app and via email with a message template including the symbol, date, high, low, range, and candle time."
+}
