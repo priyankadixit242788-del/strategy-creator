@@ -1,0 +1,6 @@
+{
+  "setup_id": "d65e0ced",
+  "screener_job_id": "6ceeece5",
+  "mode": "alert",
+  "prompt": "Run every 5 minutes from 09:30 to 15:15 IST on every new SMA Crossover Range Hunter match. Alert once per stock per day using the screener's stock, date, high, low, range, and candle time columns. Generate the configured long limit-entry trade legs for alert-mode recording. The platform enforces the configured sizing, trade limits, cooldown, universe, and duplicate policy."
+}
