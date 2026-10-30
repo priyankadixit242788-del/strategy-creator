@@ -1,0 +1,5 @@
+{
+  "job_id": "aaac78ea",
+  "api_path": "/strategy-api/aaac78ea",
+  "prompt": "Build a screener for NIFTY 50 stocks on 5-minute candles that identifies stocks with a long wick doji pattern (where the lower wick is double the body plus the upper wick) at either the 2nd or 3rd support pivot level, evaluated over the last 5 candles. Exclude illiquid stocks. Present results in a Ranked Table showing the columns: Symbol, Last price (LTP), Pivot S2, Pivot S3, sorted by Last price (LTP) descending. Limit the results to 50 stocks, with pagination set to numbered pages showing 10 stocks per page."
+}

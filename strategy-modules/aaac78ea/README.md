@@ -1,0 +1,1 @@
+This screener checks the latest five 5-minute candles for active NIFTY 50 members and returns stocks with positive trading volume when a candle's lower wick equals twice its body plus its upper wick and touches both the Classic Pivot S2 and S3 support levels; results are ranked by last price in descending order.
